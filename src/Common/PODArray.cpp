@@ -22,7 +22,7 @@ void protectMemoryRegion(void * addr, size_t len, int prot)
 }
 #endif
 
-void throw_alloc_error()
+void throwCannotAllocateMemory()
 {
     throw Exception(ErrorCodes::CANNOT_ALLOCATE_MEMORY, "Amount of memory requested to allocate is more than allowed");
 }
