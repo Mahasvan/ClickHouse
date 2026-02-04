@@ -47,7 +47,6 @@ const VersionToSettingsChangesMap & getSettingsChangesHistory()
             {"use_statistics_cache", 0, 1, "Enable statistics cache"},
             {"use_statistics_cache", false, true, "Enable statistics cache"},
             {"default_dictionary_database", "", "", "New setting"},
-            {"variant_throw_on_type_mismatch", false, false, "Controls Variant type behavior on type mismatch: false returns NULL (default), true throws exception like Dynamic."},
         });
         addSettingsChanges(settings_changes_history, "26.1",
         {
