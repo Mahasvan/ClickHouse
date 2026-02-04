@@ -45,6 +45,7 @@ const VersionToSettingsChangesMap & getSettingsChangesHistory()
             {"parallel_replicas_filter_pushdown", false, false, "New setting"},
 
             {"use_statistics_cache", 0, 1, "Enable statistics cache"},
+            {"use_statistics_cache", false, true, "Enable statistics cache"},
         });
         addSettingsChanges(settings_changes_history, "26.1",
         {
