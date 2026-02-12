@@ -7,9 +7,9 @@
 #include <Columns/ColumnsNumber.h>
 
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeFactory.h>
 
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -27,7 +27,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-extern const int BAD_ARGUMENTS;
+    extern const int BAD_ARGUMENTS;
 }
 
 template <typename Point>
@@ -61,11 +61,9 @@ private:
             return InputGeometryType::Polygon;
         if (factory.get("MultiPolygon")->equals(*type))
             return InputGeometryType::MultiPolygon;
-        throw Exception(
-            ErrorCodes::BAD_ARGUMENTS,
+        throw Exception(ErrorCodes::BAD_ARGUMENTS,
             "Unsupported geometry type for {}: {}. Expected Ring, Polygon, or MultiPolygon",
-            "groupPolygonUnion",
-            type->getName());
+            "groupPolygonUnion", type->getName());
     }
 
 public:
@@ -73,8 +71,7 @@ public:
         : IAggregateFunctionDataHelper<Data, AggregateFunctionGroupPolygonUnion<Point>>(
             argument_types_, {}, DataTypeFactory::instance().get("MultiPolygon"))
         , input_type(resolveInputType(argument_types_.at(0)))
-    {
-    }
+    {}
 
     String getName() const override { return "groupPolygonUnion"; }
 
@@ -91,7 +88,8 @@ public:
 
         switch (input_type)
         {
-            case InputGeometryType::Ring: {
+            case InputGeometryType::Ring:
+            {
                 auto rings = ColumnToRingsConverter<Point>::convert(single_row_col);
                 if (rings.empty())
                     return;
@@ -101,7 +99,8 @@ public:
                 current_multi_polygon.emplace_back(std::move(polygon));
                 break;
             }
-            case InputGeometryType::Polygon: {
+            case InputGeometryType::Polygon:
+            {
                 auto polygons = ColumnToPolygonsConverter<Point>::convert(single_row_col);
                 if (polygons.empty())
                     return;
@@ -109,7 +108,8 @@ public:
                 current_multi_polygon.emplace_back(std::move(polygons[0]));
                 break;
             }
-            case InputGeometryType::MultiPolygon: {
+            case InputGeometryType::MultiPolygon:
+            {
                 auto multi_polygons = ColumnToMultiPolygonsConverter<Point>::convert(single_row_col);
                 if (multi_polygons.empty())
                     return;
