@@ -182,10 +182,6 @@ void SQLiteSource::insertValue(IColumn & column, ExternalResultDescription::Valu
             assert_cast<ColumnString &>(column).insertData(data, len);
             break;
         }
-<<<<<<< HEAD
-        default:
-            throw Exception(ErrorCodes::SQLITE_ENGINE_ERROR, "Unsupported type for SQLite column");
-=======
         case ValueType::vtDate:
         {
             const char * data = reinterpret_cast<const char *>(sqlite3_column_text(compiled_statement.get(), idx));
@@ -251,7 +247,6 @@ void SQLiteSource::insertValue(IColumn & column, ExternalResultDescription::Valu
             data_type.getDefaultSerialization()->deserializeWholeText(column, buffer, FormatSettings{});
             break;
         }
->>>>>>> 0d45c54282e (Fix SQLite engine type conversion for DateTime, Date, UUID and other types)
     }
 }
 
