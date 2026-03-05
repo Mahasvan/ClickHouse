@@ -951,6 +951,66 @@ def test_postgres_insert_boolean_array(started_cluster):
     cursor.execute("DROP TABLE test_bool_array")
 
 
+def test_postgres_date32(started_cluster):
+    """Test that PostgreSQL DATE values outside the Date (UInt16) range are correctly read.
+
+    This is a regression test for https://github.com/ClickHouse/ClickHouse/issues/73084
+    PostgreSQL DATE type supports a much wider range than ClickHouse Date (1970-2149).
+    Large dates like '2276-11-21' must be read correctly using Date32.
+    """
+    cursor = started_cluster.postgres_conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS test_date32")
+    cursor.execute("CREATE TABLE test_date32 (d DATE)")
+
+    # Insert dates that would overflow with the old Date (UInt16) type
+    # Date range is ~1970-2149, these dates are beyond that
+    cursor.execute(
+        "INSERT INTO test_date32 VALUES ('2276-11-21'), ('2269-07-01'), ('2200-01-01'), ('1950-06-15')"
+    )
+
+    # Read dates back using the postgresql table function
+    result = node1.query(
+        f"SELECT d FROM postgresql('postgres1:5432', 'postgres', 'test_date32', 'postgres', '{pg_pass}') ORDER BY d"
+    )
+    expected = "1950-06-15\n2200-01-01\n2269-07-01\n2276-11-21\n"
+    assert result == expected, f"Expected:\n{expected}\nGot:\n{result}"
+
+    # Also verify the column type is Date32
+    result = node1.query(
+        f"DESCRIBE TABLE postgresql('postgres1:5432', 'postgres', 'test_date32', 'postgres', '{pg_pass}')"
+    )
+    assert "Date32" in result, f"Expected Date32 type, got: {result}"
+
+    cursor.execute("DROP TABLE test_date32")
+
+
+def test_postgres_date32_array(started_cluster):
+    """Test that PostgreSQL DATE[] arrays with large dates are correctly read as Array(Date32)."""
+    cursor = started_cluster.postgres_conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS test_date32_array")
+    cursor.execute("CREATE TABLE test_date32_array (dates DATE[] NOT NULL)")
+
+    # Insert array with dates that would overflow with Date (UInt16)
+    cursor.execute(
+        "INSERT INTO test_date32_array VALUES (ARRAY['2276-11-21'::date, '2269-07-01'::date, '1950-06-15'::date])"
+    )
+
+    # Read dates back (array elements are in insertion order)
+    result = node1.query(
+        f"SELECT dates FROM postgresql('postgres1:5432', 'postgres', 'test_date32_array', 'postgres', '{pg_pass}')"
+    )
+    expected = "['2276-11-21','2269-07-01','1950-06-15']\n"
+    assert result == expected, f"Expected:\n{expected}\nGot:\n{result}"
+
+    # Verify the column type is Array(Date32)
+    result = node1.query(
+        f"DESCRIBE TABLE postgresql('postgres1:5432', 'postgres', 'test_date32_array', 'postgres', '{pg_pass}')"
+    )
+    assert "Array(Date32)" in result, f"Expected Array(Date32) type, got: {result}"
+
+    cursor.execute("DROP TABLE test_date32_array")
+
+
 if __name__ == "__main__":
     cluster.start()
     input("Cluster created, press any key to destroy...")
