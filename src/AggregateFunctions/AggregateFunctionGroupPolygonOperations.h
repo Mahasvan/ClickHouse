@@ -86,6 +86,8 @@ private:
             case WKBGeometry::Polygon:
             {
                 auto polygon = getPolygonFromField<Point>(field);
+                if (polygon.outer().empty())
+                    return std::nullopt;
                 if (should_correct)
                     boost::geometry::correct(polygon);
                 result.emplace_back(std::move(polygon));
