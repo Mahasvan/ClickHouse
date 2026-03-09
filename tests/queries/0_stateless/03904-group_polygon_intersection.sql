@@ -10,7 +10,7 @@ SELECT groupPolygonIntersection(42); -- { serverError BAD_ARGUMENTS }
 SELECT groupPolygonIntersection((0, 0)); -- { serverError BAD_ARGUMENTS }
 SELECT groupPolygonIntersection('not a polygon'); -- { serverError BAD_ARGUMENTS }
 SELECT groupPolygonIntersection(polygon, polygon, polygon)
-    FROM (SELECT [[(0.,0.),(1.,0.),(1.,1.),(0.,0.)]] AS polygon); -- { serverError BAD_ARGUMENTS }
+    FROM (SELECT [[(0.,0.),(1.,0.),(1.,1.),(0.,0.)]] AS polygon); -- { serverError NUMBER_OF_ARGUMENTS_DOESNT_MATCH }
 
 -- Invalid correct_geometry type
 SELECT groupPolygonIntersection(polygon, polygon)
