@@ -14,14 +14,16 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 
-#include <Common/WKB.h>
-#include <Functions/geometryConverters.h>
 #include <Functions/geometry.h>
+#include <Functions/geometryConverters.h>
+#include <Common/WKB.h>
 
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/io/wkt/wkt.hpp>
 
+#include <iomanip>
+#include <limits>
 #include <optional>
 #include <sstream>
 
@@ -30,7 +32,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
+extern const int BAD_ARGUMENTS;
 }
 
 static constexpr WKBGeometry WKB_RING = static_cast<WKBGeometry>(100);
@@ -60,19 +62,19 @@ private:
             return WKBGeometry::Polygon;
         if (factory.get("MultiPolygon")->equals(*type))
             return WKBGeometry::MultiPolygon;
-        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
             "Unsupported geometry type for {}: {}. Expected Ring, Polygon, or MultiPolygon",
-            Policy::name, type->getName());
+            Policy::name,
+            type->getName());
     }
 
-    static std::optional<MultiPolygon<Point>> extractMultiPolygon(
-        const Field & field, WKBGeometry type, bool should_correct)
+    static std::optional<MultiPolygon<Point>> extractMultiPolygon(const Field & field, WKBGeometry type, bool should_correct)
     {
         MultiPolygon<Point> result;
         switch (type)
         {
-            case WKB_RING:
-            {
+            case WKB_RING: {
                 auto ring = getRingFromField<Point>(field);
                 if (ring.empty())
                     return std::nullopt;
@@ -83,8 +85,7 @@ private:
                 result.emplace_back(std::move(polygon));
                 break;
             }
-            case WKBGeometry::Polygon:
-            {
+            case WKBGeometry::Polygon: {
                 auto polygon = getPolygonFromField<Point>(field);
                 if (polygon.outer().empty())
                     return std::nullopt;
@@ -93,8 +94,7 @@ private:
                 result.emplace_back(std::move(polygon));
                 break;
             }
-            case WKBGeometry::MultiPolygon:
-            {
+            case WKBGeometry::MultiPolygon: {
                 result = getMultiPolygonFromField<Point>(field);
                 if (result.empty())
                     return std::nullopt;
@@ -111,10 +111,11 @@ private:
 public:
     explicit AggregateFunctionGroupPolygonOp(const DataTypes & argument_types_, bool correct_geometry_ = true)
         : IAggregateFunctionDataHelper<Data, AggregateFunctionGroupPolygonOp<Point, Policy>>(
-            argument_types_, {}, DataTypeFactory::instance().get("MultiPolygon"))
+              argument_types_, {}, DataTypeFactory::instance().get("MultiPolygon"))
         , input_type(resolveInputType(argument_types_.at(0)))
         , correct_geometry(correct_geometry_)
-    {}
+    {
+    }
 
     String getName() const override { return Policy::name; }
 
@@ -187,7 +188,7 @@ public:
 
         std::stringstream wkt_stream; // STYLE_CHECK_ALLOW_STD_STRING_STREAM
         wkt_stream.exceptions(std::ios::failbit);
-        wkt_stream << boost::geometry::wkt(state.accumulated);
+        wkt_stream << std::setprecision(std::numeric_limits<double>::max_digits10) << boost::geometry::wkt(state.accumulated);
         std::string wkt_str = wkt_stream.str();
 
         writeVarUInt(wkt_str.size(), buf);
