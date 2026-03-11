@@ -24,6 +24,8 @@
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/io/wkt/wkt.hpp>
 
+#include <iomanip>
+#include <limits>
 #include <sstream>
 #include <base/EnumReflection.h>
 
@@ -288,7 +290,7 @@ public:
 
         std::stringstream wkt_stream; // STYLE_CHECK_ALLOW_STD_STRING_STREAM
         wkt_stream.exceptions(std::ios::failbit);
-        wkt_stream << boost::geometry::wkt(state.accumulated);
+        wkt_stream << std::setprecision(std::numeric_limits<double>::max_digits10) << boost::geometry::wkt(state.accumulated);
         std::string wkt_str = wkt_stream.str();
 
         writeVarUInt(wkt_str.size(), buf);
