@@ -232,3 +232,21 @@ SELECT 'MultiPolygon with correct_geometry:',
         readWKTMultiPolygon('MULTIPOLYGON(((3 5,3 8,8 8,8 3,5 3,5 0,0 0,0 5,3 5)))'))
 FROM geo;
 DROP TABLE geo;
+
+
+-- Hit serialize() and deserialize()
+SELECT wkt(groupPolygonUnionMerge(
+    CAST(
+        (SELECT CAST(groupPolygonUnionState([[(0,0),(0,1),(1,1),(1,0),(0,0)]]::Polygon) AS String))
+    AS AggregateFunction(groupPolygonUnion, Polygon))
+));
+
+
+-- Hit merge with empty LHS state
+SELECT wkt(arrayReduce('groupPolygonUnionMerge', [
+    (SELECT groupPolygonUnionState([[(0,0),(0,1),(1,1),(1,0),(0,0)]]::Polygon) WHERE 1=0),
+    (SELECT groupPolygonUnionState([[(0,0),(0,1),(1,1),(1,0),(0,0)]]::Polygon) WHERE 1=1)
+]));
+
+-- Hit MultiPolygon explicit type
+SELECT wkt(groupPolygonUnion(CAST([[[(0,0),(0,1),(1,1),(1,0),(0,0)]]], 'MultiPolygon')));

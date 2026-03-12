@@ -289,3 +289,21 @@ SELECT 'MultiPolygon with correct_geometry:',
         readWKTMultiPolygon('MULTIPOLYGON(((2 5,5 5,5 2,2 2,2 5)))'))
 FROM geo;
 DROP TABLE geo;
+
+
+
+-- Hit serialize() and deserialize()
+SELECT wkt(groupPolygonIntersectionMerge(
+    CAST(
+        (SELECT CAST(groupPolygonIntersectionState([[(0,0),(0,1),(1,1),(1,0),(0,0)]]::Polygon) AS String))
+    AS AggregateFunction(groupPolygonIntersection, Polygon))
+));
+
+-- Hit merge with empty LHS state
+SELECT wkt(arrayReduce('groupPolygonIntersectionMerge', [
+    (SELECT groupPolygonIntersectionState([[(0,0),(0,1),(1,1),(1,0),(0,0)]]::Polygon) WHERE 1=0),
+    (SELECT groupPolygonIntersectionState([[(0,0),(0,1),(1,1),(1,0),(0,0)]]::Polygon) WHERE 1=1)
+]));
+
+-- Hit MultiPolygon explicit type
+SELECT wkt(groupPolygonIntersection(CAST([[[(0,0),(0,1),(1,1),(1,0),(0,0)]]], 'MultiPolygon')));

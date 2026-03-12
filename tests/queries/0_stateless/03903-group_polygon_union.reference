@@ -18,3 +18,6 @@ correct_geometry mixed:	1
 2	1
 Ring with correct_geometry:	1
 MultiPolygon with correct_geometry:	1
+MULTIPOLYGON(((0 0,0 1,1 1,1 0,0 0)))
+MULTIPOLYGON(((0 0,0 1,1 1,1 0,0 0)))
+MULTIPOLYGON(((0 0,0 1,1 1,1 0,0 0)))
