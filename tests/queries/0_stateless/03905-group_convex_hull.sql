@@ -481,5 +481,28 @@ SELECT grp,
 FROM geo
 GROUP BY grp
 ORDER BY grp;
-
 DROP TABLE geo;
+
+
+
+
+--Hit serialize(), deserialize()
+SELECT groupConvexHullMerge(
+    CAST(unhex('01154D554C5449504F4C59474F4E282828302030292929') AS AggregateFunction(groupConvexHull, Point))
+);
+
+
+
+-- Hit merge with empty LHS state
+SELECT wkt(arrayReduce('groupConvexHullMerge', [
+    (SELECT groupConvexHullState((0,0)::Point) WHERE 1=0),
+    (SELECT groupConvexHullState((1,1)::Point) WHERE 1=1)
+]));
+
+
+
+-- Hit Geometry variant with NULL
+CREATE TABLE geo_null (g Geometry) ENGINE = Memory;
+INSERT INTO geo_null VALUES (NULL);
+SELECT groupConvexHull(g) FROM geo_null;
+DROP TABLE geo_null;
