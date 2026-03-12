@@ -191,8 +191,7 @@ public:
         wkt_stream << std::setprecision(std::numeric_limits<double>::max_digits10) << boost::geometry::wkt(state.accumulated);
         std::string wkt_str = wkt_stream.str();
 
-        writeVarUInt(wkt_str.size(), buf);
-        buf.write(wkt_str.data(), wkt_str.size());
+        writeStringBinary(wkt_str, buf);
     }
 
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena *) const override
@@ -203,11 +202,8 @@ public:
         if (!state.has_value)
             return;
 
-        size_t wkt_size;
-        readVarUInt(wkt_size, buf);
-
-        std::string wkt_str(wkt_size, '\0');
-        buf.readStrict(wkt_str.data(), wkt_size);
+        std::string wkt_str;
+        readStringBinary(wkt_str, buf);
 
         boost::geometry::read_wkt(wkt_str, state.accumulated);
     }
