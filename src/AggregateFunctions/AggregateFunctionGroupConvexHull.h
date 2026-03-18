@@ -24,6 +24,8 @@
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/io/wkt/wkt.hpp>
 
+#include <iomanip>
+#include <limits>
 #include <sstream>
 #include <base/EnumReflection.h>
 
@@ -40,6 +42,7 @@ struct AggregateFunctionGroupConvexHullData
 {
     MultiPolygon<Point> accumulated;
     bool has_value = false;
+    size_t add_count = 0;
 };
 
 /// WKBGeometry extension constants for types not in the WKB standard.
@@ -54,6 +57,23 @@ private:
     using Data = AggregateFunctionGroupConvexHullData<Point>;
     WKBGeometry input_type;
     bool correct_geometry = true;
+
+    /// Every kPruneInterval additions, recompute the convex hull and discard
+    /// interior points to cap memory growth.
+    static constexpr size_t kPruneInterval = 3000;
+
+    static void pruneAccumulated(Data & state)
+    {
+        if (!state.has_value || state.accumulated.empty())
+            return;
+
+        Polygon<Point> hull;
+        boost::geometry::convex_hull(state.accumulated, hull);
+
+        state.accumulated.clear();
+        state.accumulated.emplace_back(std::move(hull));
+        state.add_count = 0;
+    }
 
     static WKBGeometry resolveInputType(const DataTypePtr & type)
     {
@@ -185,87 +205,81 @@ public:
             should_correct = col.getData()[row_num] != 0;
         }
 
-        /// Extract only the single row we need.
-        auto single_row_col = columns[0]->cut(row_num, 1);
-
-        switch (input_type)
+        if (input_type == WKB_GEOMETRY)
         {
-            case WKBGeometry::Point: {
-                auto points = ColumnToPointsConverter<Point>::convert(single_row_col);
-                if (!points.empty())
-                    accumulatePoint(state, std::move(points[0]), should_correct);
-                break;
-            }
-            case WKB_RING: {
-                auto rings = ColumnToRingsConverter<Point>::convert(single_row_col);
-                if (!rings.empty())
-                    accumulateRing(state, std::move(rings[0]), should_correct);
-                break;
-            }
-            case WKBGeometry::Polygon: {
-                auto polygons = ColumnToPolygonsConverter<Point>::convert(single_row_col);
-                if (!polygons.empty())
-                    accumulatePolygon(state, std::move(polygons[0]), should_correct);
-                break;
-            }
-            case WKBGeometry::MultiPolygon: {
-                auto multi_polygons = ColumnToMultiPolygonsConverter<Point>::convert(single_row_col);
-                if (!multi_polygons.empty())
-                    accumulateMultiPolygon(state, std::move(multi_polygons[0]), should_correct);
-                break;
-            }
-            case WKBGeometry::LineString: {
-                auto linestrings = ColumnToLineStringsConverter<Point>::convert(single_row_col);
-                if (!linestrings.empty())
-                    accumulateLineString(state, std::move(linestrings[0]), should_correct);
-                break;
-            }
-            case WKBGeometry::MultiLineString: {
-                auto multi_linestrings = ColumnToMultiLineStringsConverter<Point>::convert(single_row_col);
-                if (!multi_linestrings.empty())
-                    accumulateMultiLineString(state, std::move(multi_linestrings[0]), should_correct);
-                break;
-            }
-            case WKB_GEOMETRY: {
-                const auto & variant_col = assert_cast<const ColumnVariant &>(*columns[0]);
+            /// Geometry (Variant) columns need special discriminator-based handling.
+            const auto & variant_col = assert_cast<const ColumnVariant &>(*columns[0]);
 
-                auto local_discr = variant_col.localDiscriminatorAt(row_num);
-                if (local_discr == ColumnVariant::NULL_DISCRIMINATOR)
-                    return; /// NULL row, skip
+            auto local_discr = variant_col.localDiscriminatorAt(row_num);
+            if (local_discr == ColumnVariant::NULL_DISCRIMINATOR)
+                return; /// NULL row, skip
 
-                Field field;
-                variant_col.get(row_num, field);
+            Field field;
+            variant_col.get(row_num, field);
 
-                auto geo_type = magic_enum::enum_cast<GeometryColumnType>(static_cast<int>(variant_col.globalDiscriminatorAt(row_num)));
-                if (!geo_type)
-                    return;
+            auto geo_type = magic_enum::enum_cast<GeometryColumnType>(static_cast<int>(variant_col.globalDiscriminatorAt(row_num)));
+            if (!geo_type)
+                return;
 
-                switch (*geo_type)
-                {
-                    case GeometryColumnType::Point:
-                        accumulatePoint(state, getPointFromField<Point>(field), should_correct);
-                        break;
-                    case GeometryColumnType::Ring:
-                        accumulateRing(state, getRingFromField<Point>(field), should_correct);
-                        break;
-                    case GeometryColumnType::Polygon:
-                        accumulatePolygon(state, getPolygonFromField<Point>(field), should_correct);
-                        break;
-                    case GeometryColumnType::MultiPolygon:
-                        accumulateMultiPolygon(state, getMultiPolygonFromField<Point>(field), should_correct);
-                        break;
-                    case GeometryColumnType::Linestring:
-                        accumulateLineString(state, getLineStringFromField<Point>(field), should_correct);
-                        break;
-                    case GeometryColumnType::MultiLinestring:
-                        accumulateMultiLineString(state, getMultiLineStringFromField<Point>(field), should_correct);
-                        break;
-                    case GeometryColumnType::Null:
-                        break;
-                }
-                break;
+            switch (*geo_type)
+            {
+                case GeometryColumnType::Point:
+                    accumulatePoint(state, getPointFromField<Point>(field), should_correct);
+                    break;
+                case GeometryColumnType::Ring:
+                    accumulateRing(state, getRingFromField<Point>(field), should_correct);
+                    break;
+                case GeometryColumnType::Polygon:
+                    accumulatePolygon(state, getPolygonFromField<Point>(field), should_correct);
+                    break;
+                case GeometryColumnType::MultiPolygon:
+                    accumulateMultiPolygon(state, getMultiPolygonFromField<Point>(field), should_correct);
+                    break;
+                case GeometryColumnType::Linestring:
+                    accumulateLineString(state, getLineStringFromField<Point>(field), should_correct);
+                    break;
+                case GeometryColumnType::MultiLinestring:
+                    accumulateMultiLineString(state, getMultiLineStringFromField<Point>(field), should_correct);
+                    break;
+                case GeometryColumnType::Null:
+                    break;
             }
         }
+        else
+        {
+            /// For concrete geometry types, extract via Field which works for any column
+            /// type including ColumnConst (unlike cut + bulk converters which crash on ColumnConst).
+            Field field;
+            columns[0]->get(row_num, field);
+
+            switch (input_type)
+            {
+                case WKBGeometry::Point:
+                    accumulatePoint(state, getPointFromField<Point>(field), should_correct);
+                    break;
+                case WKB_RING:
+                    accumulateRing(state, getRingFromField<Point>(field), should_correct);
+                    break;
+                case WKBGeometry::Polygon:
+                    accumulatePolygon(state, getPolygonFromField<Point>(field), should_correct);
+                    break;
+                case WKBGeometry::MultiPolygon:
+                    accumulateMultiPolygon(state, getMultiPolygonFromField<Point>(field), should_correct);
+                    break;
+                case WKBGeometry::LineString:
+                    accumulateLineString(state, getLineStringFromField<Point>(field), should_correct);
+                    break;
+                case WKBGeometry::MultiLineString:
+                    accumulateMultiLineString(state, getMultiLineStringFromField<Point>(field), should_correct);
+                    break;
+                case WKB_GEOMETRY:
+                    break; /// Already handled above
+            }
+        }
+
+        /// Periodically prune interior points to bound memory.
+        if (++state.add_count >= kPruneInterval)
+            pruneAccumulated(state);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -286,10 +300,16 @@ public:
             /// Append all polygons from rhs into our accumulator.
             state.accumulated.insert(state.accumulated.end(), rhs_state.accumulated.begin(), rhs_state.accumulated.end());
         }
+
+        /// Prune after merge if the combined state is large.
+        state.add_count += rhs_state.add_count;
+        if (state.add_count >= kPruneInterval)
+            pruneAccumulated(state);
     }
 
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> /* version */) const override
     {
+        std::cerr << "serialize hit convexhull" << std::endl;
         const auto & state = this->data(place);
 
         writeBinaryLittleEndian(state.has_value, buf);
@@ -298,7 +318,7 @@ public:
 
         std::stringstream wkt_stream; // STYLE_CHECK_ALLOW_STD_STRING_STREAM
         wkt_stream.exceptions(std::ios::failbit);
-        wkt_stream << boost::geometry::wkt(state.accumulated);
+        wkt_stream << std::setprecision(std::numeric_limits<double>::max_digits10) << boost::geometry::wkt(state.accumulated);
         std::string wkt_str = wkt_stream.str();
 
         writeVarUInt(wkt_str.size(), buf);
@@ -308,6 +328,15 @@ public:
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena *) const override
     {
         auto & state = this->data(place);
+        std::cerr << "deserialize hit convexhull" << std::endl;
+
+        auto * p = buf.position();
+        auto * e = buf.buffer().end();
+        std::cerr << "--- DEBUG: buf contents (" << (e - p) << " bytes) ---" << std::endl;
+        for (auto * it = p; it != e; ++it)
+            std::cerr << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(static_cast<unsigned char>(*it)) << " ";
+        std::cerr << std::dec << std::endl;
+        std::cerr << "---------------------------------------" << std::endl;
 
         readBinaryLittleEndian(state.has_value, buf);
         if (!state.has_value)
@@ -315,7 +344,7 @@ public:
 
         size_t wkt_size;
         readVarUInt(wkt_size, buf);
-
+        std::cerr << "wkt_size : " << wkt_size << std::endl;
         std::string wkt_str(wkt_size, '\0');
         buf.readStrict(wkt_str.data(), wkt_size);
 
